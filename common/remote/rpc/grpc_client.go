@@ -22,6 +22,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"github.com/nacos-group/nacos-sdk-go/v2/common/monitor"
 	"io"
 	"log"
 	"net"
@@ -327,6 +328,11 @@ func serverCheck(client nacos_grpc_service.RequestClient) (rpc_response.IRespons
 func (c *GrpcClient) handleServerRequest(p *nacos_grpc_service.Payload, grpcConn *GrpcConnection) {
 	client := c.GetRpcClient()
 	payLoadType := p.GetMetadata().GetType()
+	start := time.Now()
+	status := "NA"
+	defer func() {
+		monitor.GetNamingRequestMonitor(constant.GRPC, payLoadType, status).Observe(float64(time.Now().Sub(start).Nanoseconds()))
+	}()
 
 	handlerMapping, ok := client.serverRequestHandlerMapping.Load(payLoadType)
 	if !ok {
@@ -352,6 +358,7 @@ func (c *GrpcClient) handleServerRequest(p *nacos_grpc_service.Payload, grpcConn
 			serverRequest.GetRequestId())
 		return
 	}
+	status = rpc_response.GetGrpcResponseStatusCode(response)
 	response.SetRequestId(serverRequest.GetRequestId())
 	err = grpcConn.biStreamSend(convertResponse(response))
 	if err != nil && err != io.EOF {
